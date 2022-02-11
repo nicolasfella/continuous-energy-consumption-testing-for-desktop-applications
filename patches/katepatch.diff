@@ -1,0 +1,45 @@
+diff --git a/kate/katemainwindow.cpp b/kate/katemainwindow.cpp
+index dd9fe5533..ccd124bda 100644
+--- a/kate/katemainwindow.cpp
++++ b/kate/katemainwindow.cpp
+@@ -1319,3 +1319,26 @@ void KateMainWindow::addRecentOpenedFile(const QUrl &url)
+     // to the global "Recent Document Menu", see bug 420504
+     KRecentDocument::add(url);
+ }
++
++QStringList KateMainWindow::viewActions()
++{
++    QStringList tmp_actions;
++    const QList<QAction *> lst = activeView()->actionCollection()->actions();
++    for (QAction *it : lst) {
++        if (!it->associatedWidgets().isEmpty()) {
++            tmp_actions.append(it->objectName());
++        }
++    }
++    return tmp_actions;
++}
++
++bool KateMainWindow::activateViewAction(const QString &action)
++{
++    QAction *tmp_Action = activeView()->actionCollection()->action(action);
++    if (tmp_Action) {
++        tmp_Action->trigger();
++        return true;
++    } else {
++        return false;
++    }
++}
+diff --git a/kate/katemainwindow.h b/kate/katemainwindow.h
+index 2aaf8ddc7..de692a42a 100644
+--- a/kate/katemainwindow.h
++++ b/kate/katemainwindow.h
+@@ -162,6 +162,9 @@ public Q_SLOTS:
+     void slotFocusPrevTab();
+     void slotFocusNextTab();
+
++    QStringList viewActions();
++    bool activateViewAction(const QString &action);
++
+     /**
+      * Show quick open
+      */

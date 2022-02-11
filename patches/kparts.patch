@@ -1,0 +1,191 @@
+From 877ff3f6b6eca1b2258c11533783ec36fdbd6785 Mon Sep 17 00:00:00 2001
+From: Nicolas Fella <nicolas.fella@gmx.de>
+Date: Thu, 23 Sep 2021 21:20:04 +0200
+Subject: [PATCH] Expose part actions in KParts::MainWindow DBus interface
+
+KMainWindow exposes the actions known to KXmlGui in the
+org.kde.KMainWindow DBus interface. This allows to trigger actions from
+the outside via DBus which allows for all kinds of scripting/automation.
+
+Some apps like Okular have their main functionality implemented
+in a KPart and the app is just a thin wrapper around that. In this case
+only the actions from the wrapper window are accessible via DBus and the
+actions defined by the part are not, severly limiting the usefulness of
+the DBus API.
+
+This patch adds the same set of functions that are available on the
+org.kde.KMainWindow to the interface exposed by the KParts::MainWindow
+class to query and interact with the part actions.
+
+This enables calls like `qdbus org.kde.okular-$(pidof okular) /okular/okular__Shell_1 org.kde.okular.KParts.MainWindow.activatePartAction go_next` which weren't previously possible.
+---
+ src/mainwindow.cpp | 89 ++++++++++++++++++++++++++++++++++++++++++++++
+ src/mainwindow.h   | 52 +++++++++++++++++++++++++++
+ 2 files changed, 141 insertions(+)
+
+diff --git a/src/mainwindow.cpp b/src/mainwindow.cpp
+index c09c9b7..f174f0c 100644
+--- a/src/mainwindow.cpp
++++ b/src/mainwindow.cpp
+@@ -105,6 +105,95 @@ void MainWindow::createGUI(Part *part)
+     d->m_activePart = part;
+ }
+ 
++QStringList MainWindow::partActions() const
++{
++    if (!d->m_activePart) {
++        return {};
++    }
++
++    QStringList tmp_actions;
++    const QList<QAction *> lst = d->m_activePart->actionCollection()->actions();
++    for (QAction *it : lst) {
++        if (!it->associatedWidgets().isEmpty()) {
++            tmp_actions.append(it->objectName());
++        }
++    }
++    return tmp_actions;
++}
++
++bool MainWindow::activatePartAction(const QString &action)
++{
++    if (!d->m_activePart) {
++        return false;
++    }
++
++    QAction *tmp_Action = d->m_activePart->actionCollection()->action(action);
++    if (tmp_Action) {
++        tmp_Action->trigger();
++        return true;
++    } else {
++        return false;
++    }
++}
++
++bool MainWindow::disablePartAction(const QString &action)
++{
++    if (!d->m_activePart) {
++        return false;
++    }
++
++    QAction *tmp_Action = d->m_activePart->actionCollection()->action(action);
++    if (tmp_Action) {
++        tmp_Action->setEnabled(false);
++        return true;
++    } else {
++        return false;
++    }
++}
++
++bool MainWindow::enablePartAction(const QString &action)
++{
++    if (!d->m_activePart) {
++        return false;
++    }
++
++    QAction *tmp_Action = d->m_activePart->actionCollection()->action(action);
++    if (tmp_Action) {
++        tmp_Action->setEnabled(true);
++        return true;
++    } else {
++        return false;
++    }
++}
++
++bool MainWindow::partActionIsEnabled(const QString &action)
++{
++    if (!d->m_activePart) {
++        return false;
++    }
++
++    QAction *tmp_Action = d->m_activePart->actionCollection()->action(action);
++    if (tmp_Action) {
++        return tmp_Action->isEnabled();
++    } else {
++        return false;
++    }
++}
++
++QString MainWindow::partActionToolTip(const QString &action)
++{
++    if (!d->m_activePart) {
++        return QString();
++    }
++
++    QAction *tmp_Action = d->m_activePart->actionCollection()->action(action);
++    if (tmp_Action) {
++        return tmp_Action->toolTip();
++    } else {
++        return QStringLiteral("Error no such object!");
++    }
++}
++
+ void MainWindow::slotSetStatusBarText(const QString &text)
+ {
+     statusBar()->showMessage(text);
+diff --git a/src/mainwindow.h b/src/mainwindow.h
+index 19b30bd..244f1cf 100644
+--- a/src/mainwindow.h
++++ b/src/mainwindow.h
+@@ -63,6 +63,58 @@ public:
+ public Q_SLOTS:
+     void configureToolbars() override;
+ 
++    /**
++     * Return a list of actions available for the active part.
++     * @return A QStringList containing valid names actions.
++     * @since 5.87
++     */
++    QStringList partActions() const;
++
++    /**
++     * Activates the requested action.
++     * @param action The name of the action to activate.  The names of valid
++     * actions can be found by calling partActions().
++     * @return The success of the operation.
++     * @since 5.87
++     */
++    bool activatePartAction(const QString &action);
++
++    /**
++     * Disables the requested action.
++     * @param action The name of the action to disable.  The names of valid
++     * actions can be found by calling partActions().
++     * @return The success of the operation.
++     * @since 5.87
++     */
++    bool disablePartAction(const QString &action);
++
++    /**
++     * Enables the requested action.
++     * @param action The name of the action to enable.  The names of valid
++     * actions can be found by calling actions().
++     * @return The success of the operation.
++     * @since 5.87
++     */
++    bool enablePartAction(const QString &action);
++
++    /**
++     * Returns the status of the requested action.
++     * @param action The name of the action.  The names of valid
++     * actions can be found by calling actions().
++     * @returns The state of the action, true - enabled, false - disabled.
++     * @since 5.87
++     */
++    bool partActionIsEnabled(const QString &action);
++
++    /**
++     * Returns the tool tip text of the requested action.
++     * @param action The name of the action to activate.  The names of valid
++     * actions can be found by calling actions().
++     * @return A QString containing the text of the action's tool tip.
++     * @since 5.87
++     */
++    QString partActionToolTip(const QString &action);
++
+ protected Q_SLOTS:
+ 
+     /**
+-- 
+2.33.0
+
